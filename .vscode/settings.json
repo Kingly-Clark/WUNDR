@@ -1,0 +1,33 @@
+{
+  "workbench.colorCustomizations": {
+    "titleBar.activeForeground": "#000000",
+    "titleBar.inactiveForeground": "#000000CC",
+    "titleBar.activeBackground": "#eb5149",
+    "titleBar.inactiveBackground": "#eb5149",
+    "statusBar.background": "#eb5149",
+    "statusBar.foreground": "#000000"
+  },
+  "files.eol": "\n",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.trimAutoWhitespace": true,
+  "editor.formatOnPaste": true,
+  "eslint.packageManager": "npm",
+  "editor.formatOnSave": true,
+  "[typescript]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "eslint.validate": ["typescript"],
+  "eslint.alwaysShowStatus": true,
+  "breadcrumbs.enabled": true,
+  "editor.renderControlCharacters": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[solidity]": {
+    "editor.defaultFormatter": "NomicFoundation.hardhat-solidity"
+  },
+}

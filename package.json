@@ -1,0 +1,27 @@
+{
+  "name": "wunderpar",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx hardhat test",
+    "clean": "rm -rf ./artifacts ./cache ./build",
+    "coverage": "npx hardhat coverage && open coverage/index.html",
+    "gas": "REPORT_GAS=true npx hardhat test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@openzeppelin/contracts": "^4.9.2",
+    "dotenv": "^16.3.1",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.14.0",
+    "hardhat-contract-sizer": "^2.8.0",
+    "hardhat-gas-reporter": "^1.0.9",
+    "hardhat-test-utils": "^0.1.1",
+    "solidity-coverage": "^0.8.2"
+  }
+}
