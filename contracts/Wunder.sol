@@ -94,40 +94,53 @@ contract Wunder is
         return super.transferFrom(from, to, amount);
     }
 
-    /**
-     * @dev Uses ERC20._transfer to transfer tokens from sender to recipient.
-     *
-     * The ability to transfor to mutiple recipients.
-     *
-     * Requirements:
-     * - contract must not be paused.
-     * - sender must not be frozen.
-     * - recipients must not be frozen.
-     * - recipients must not be the sender.
-     */
-    function multiTransfer(
+    function batchTransfer(
         address[] memory recipients,
         uint256[] memory amounts
-    ) public override whenNotPaused returns (bool) {
+    ) external override whenNotPaused {
         require(
             recipients.length == amounts.length,
             "Wunder: recipients and amounts length mismatch"
         );
 
         require(
-            recipients.length < 256,
+            recipients.length <= 256,
             "Wunder: recipients and amounts length must be less than 256"
         );
 
         for (uint256 i = 0; i < recipients.length; i++) {
-            require(
-                recipients[i] != _msgSender(),
-                "Wunder: Recipient cannot be the sender"
-            );
-            _transfer(_msgSender(), recipients[i], amounts[i]);
+            address to = recipients[i];
+            require(to != address(0), "Wunder: transfer to the zero address");
+
+            _transfer(_msgSender(), to, amounts[i]);
         }
-        emit MultiTransfer(_msgSender(), recipients, amounts);
-        return true;
+
+        emit BatchTransfer(_msgSender(), recipients, amounts);
+    }
+
+    function batchMint(
+        address[] memory recipients,
+        uint256[] memory amounts
+    ) external override whenNotPaused onlyRole(MINTER_ROLE) {
+        require(
+            recipients.length == amounts.length,
+            "Wunder: recipients and amounts length mismatch"
+        );
+
+        require(
+            recipients.length <= 256,
+            "Wunder: recipients and amounts length must be less than 256"
+        );
+
+        for (uint256 i = 0; i < recipients.length; i++) {
+            address to = recipients[i];
+            require(to != address(0), "Wunder: mint to the zero address");
+
+            uint256 amount = amounts[i];
+            _mint(to, amount);
+        }
+
+        emit BatchMint(_msgSender(), recipients, amounts);
     }
 
     function supportsInterface(

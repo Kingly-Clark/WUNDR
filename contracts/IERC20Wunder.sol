@@ -7,10 +7,19 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  */
 interface IERC20Wunder is IERC20 {
     /**
-     * @dev Emitted when `account` is frozen.
+     * @dev Emitted when `amounts` tokens are moved from one account (`sender`) to multiple `recipients`.
      */
-    event MultiTransfer(
+    event BatchTransfer(
         address indexed sender,
+        address[] recipients,
+        uint256[] amounts
+    );
+
+    /**
+     * @dev Emitted when `amounts` tokens are minted to multiple `recipients`.
+     */
+    event BatchMint(
+        address indexed minter,
         address[] recipients,
         uint256[] amounts
     );
@@ -20,14 +29,24 @@ interface IERC20Wunder is IERC20 {
      *
      * The ability to transfor to mutiple recipients.
      *
-     * Requirements:
-     * - contract must not be paused.
-     * - sender must not be frozen.
-     * - recipients must not be frozen.
-     * - recipients must not be the sender.
+     * @param recipients - array of recipient addresses
+     * @param amounts - array of amounts to transfer to each recipient
+     *
      */
-    function multiTransfer(
+    function batchTransfer(
         address[] memory recipients,
         uint256[] memory amounts
-    ) external returns (bool);
+    ) external;
+
+    /**
+     * @dev Mint tokens to multiple recipients.
+     *
+     * @param recipients - array of recipient addresses
+     * @param amounts - array of amounts to mint to each recipient
+     *
+     */
+    function batchMint(
+        address[] memory recipients,
+        uint256[] memory amounts
+    ) external;
 }
