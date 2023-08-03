@@ -11,7 +11,7 @@ module.exports = {
         });
       },
       network_id: 137,
-      gasPrice: 300 * 10 ** 9,
+      gasPrice: 150 * 10 ** 9,
       confirmations: 2,
       timeoutBlocks: 200,
       skipDryRun: true,
@@ -34,7 +34,7 @@ module.exports = {
       provider: () =>
         new HDWalletProvider(process.env.MNEMONIC, process.env.POLYGON_NODE),
       network_id: 137,
-      gasPrice: 300 * 10 ** 9,
+      gasPrice: 150 * 10 ** 9,
       confirmations: 2,
       timeoutBlocks: 200,
       skipDryRun: true,

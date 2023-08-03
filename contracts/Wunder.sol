@@ -17,12 +17,8 @@ contract Wunder is
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /**
-     * See {IERC20-constructor}.
-     *
      * @dev Grants `DEFAULT_ADMIN_ROLE` to the account that deploys the contract.
-     * Uses AccessControlDefaultAdminRules to be able to revoke DEFAULT_ADMIN_ROLE later.
-     *
-     * Further roles can be granted by the deployer wallets by calling {grantRole}.
+     * Uses AccessControlDefaultAdminRules to ensure only 1 admin.
      *
      */
     constructor()
@@ -39,6 +35,7 @@ contract Wunder is
      * Requirements:
      * - contract must not be paused.
      * - caller must have the `BURNER_ROLE`.
+     * @param amount Amount of tokens to be burned.
      */
     function burn(uint256 amount) public whenNotPaused onlyRole(BURNER_ROLE) {
         _burn(_msgSender(), amount);
@@ -64,6 +61,9 @@ contract Wunder is
         _unpause();
     }
 
+    /**
+     * @dev Adds whenNotPaused modifier to ERC20 transfer function.
+     */
     function transfer(
         address to,
         uint256 amount
@@ -71,6 +71,9 @@ contract Wunder is
         return super.transfer(to, amount);
     }
 
+    /**
+     * @dev Adds whenNotPaused modifier to ERC20 transferFrom function.
+     */
     function transferFrom(
         address from,
         address to,
@@ -79,6 +82,15 @@ contract Wunder is
         return super.transferFrom(from, to, amount);
     }
 
+    /**
+     * @dev See {IERC20Wunder-batchTransfer}.
+     * Requirements:
+     * - contract must not be paused.
+     * - throws if recipients and amounts length mismatch.
+     * - throws if recipients and amounts length is greater than 256.
+     * @param recipients Array of recipient addresses.
+     * @param amounts Array of amounts to be transferred.
+     */
     function batchTransfer(
         address[] memory recipients,
         uint256[] memory amounts
@@ -101,6 +113,16 @@ contract Wunder is
         emit BatchTransfer(_msgSender(), recipients, amounts);
     }
 
+    /**
+     * @dev See {IERC20Wunder-batchMint}.
+     * Requirements:
+     * - contract must not be paused.
+     * - caller must have the `MINTER_ROLE`.
+     * - throws if recipients and amounts length mismatch.
+     * - throws if recipients and amounts length is greater than 256.
+     * @param recipients Array of recipient addresses.
+     * @param amounts Array of amounts to be minted.
+     */
     function batchMint(
         address[] memory recipients,
         uint256[] memory amounts
@@ -122,6 +144,9 @@ contract Wunder is
         emit BatchMint(_msgSender(), recipients, amounts);
     }
 
+    /**
+     * @dev See {ERC165-supportsInterface}.
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view override returns (bool) {
