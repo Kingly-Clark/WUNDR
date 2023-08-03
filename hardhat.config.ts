@@ -13,11 +13,11 @@ const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
-        version: '0.8.19',
+        version: '0.8.18',
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 100000,
           },
         },
       },
@@ -40,11 +40,14 @@ const config: HardhatUserConfig = {
     mumbai: {
       url: process.env.MUMBAI_NODE,
       accounts: [process.env.WUNDERPAR_DEPLOYER_PRIVATE_KEY ?? ''],
+      gasPrice: 3e9,
     },
     polygon: {
       url: process.env.POLYGON_NODE,
       accounts: [process.env.WUNDERPAR_DEPLOYER_PRIVATE_KEY ?? ''],
+      gasPrice: 200e9,
     },
+
   },
   contractSizer: {
     alphaSort: true,

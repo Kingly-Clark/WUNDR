@@ -1,8 +1,9 @@
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import "@nomicfoundation/hardhat-chai-matchers";
-import { INTERFACE_IDS } from "./utils";
+
+import { INTERFACE_IDS, REVERT_MESSAGES, name, symbol } from "./utils";
 
 const wunderToEth = (decimal: string) => ethers.utils.parseEther(decimal);
 const accessControlMessage = (role: string, account: string) =>
@@ -10,25 +11,22 @@ const accessControlMessage = (role: string, account: string) =>
 
 describe("Wunder", () => {
   async function deployWunder() {
-    const [owner, notOwner, minter, pauser, burner, governor, acc1, acc2, acc3] = await ethers.getSigners();
+    const [deployer, minter, pauser, burner, acc1, acc2, acc3] = await ethers.getSigners();
 
     const Wunder = await ethers.getContractFactory("Wunder");
     const wunder = await Wunder.deploy();
 
     return {
+      deployer,
       wunder,
-      owner,
-      notOwner,
       minter,
       pauser,
       burner,
-      governor,
       acc1,
       acc2,
       acc3
     };
   }
-
 
   async function applyMinterRole(wunder: any, owner: any, minter: any) {
     await wunder.connect(owner).grantRole(await wunder.MINTER_ROLE(), minter.address);
@@ -40,10 +38,6 @@ describe("Wunder", () => {
 
   async function applyBurnerRole(wunder: any, owner: any, burner: any) {
     await wunder.connect(owner).grantRole(await wunder.BURNER_ROLE(), burner.address);
-  }
-
-  async function applyGovernRole(wunder: any, owner: any, govern: any) {
-    await wunder.connect(owner).grantRole(await wunder.GOVERN_ROLE(), govern.address);
   }
 
   /**
@@ -65,35 +59,27 @@ describe("Wunder", () => {
    * acc3: account 3
    * 
    */
-  async function deployFullWunder() {
+  async function deployWithRolesAppliedWunder() {
     const { wunder,
-      owner,
-      notOwner,
+      deployer,
       minter,
       pauser,
       burner,
-      governor,
       acc1,
       acc2,
       acc3 } = await loadFixture(deployWunder);
 
-    await applyMinterRole(wunder, owner, minter);
-    await applyPauserRole(wunder, owner, pauser);
-    await applyBurnerRole(wunder, owner, burner);
-    await applyGovernRole(wunder, owner, governor);
+    await applyMinterRole(wunder, deployer, minter);
+    await applyPauserRole(wunder, deployer, pauser);
+    await applyBurnerRole(wunder, deployer, burner);
 
-    await wunder.connect(minter).mint(acc1.address, wunderToEth("1000"));
-    await wunder.connect(minter).mint(acc2.address, wunderToEth("1000"));
-    await wunder.connect(minter).mint(acc3.address, wunderToEth("1000"));
 
     return {
       wunder,
-      owner,
-      notOwner,
+      deployer,
       minter,
       pauser,
       burner,
-      governor,
       acc1,
       acc2,
       acc3
@@ -104,207 +90,209 @@ describe("Wunder", () => {
     it("Should be able to deploy", async () => {
       const { wunder } = await loadFixture(deployWunder);
 
-      expect(await wunder.name()).to.equal("Wunderpar Token");
-      expect(await wunder.symbol()).to.equal("Wunder");
+      expect(await wunder.name()).to.equal(name);
+      expect(await wunder.symbol()).to.equal(symbol);
     });
 
-    it("Should have granted owner DEFAULT_ADMIN_ROLE to deployer (owner)", async () => {
-      const { wunder, owner } = await loadFixture(deployWunder);
+    it("Should have granted DEFAULT_ADMIN_ROLE to deployer", async () => {
+      const { wunder, deployer } = await loadFixture(deployWunder);
 
-      expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+      expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
     });
 
-    it("Should not have granted owner MINTER_ROLE to deployer (owner)", async () => {
-      const { wunder, owner } = await loadFixture(deployWunder);
+    it("Should not have granted MINTER_ROLE to deployer after deployment", async () => {
+      const { wunder, deployer } = await loadFixture(deployWunder);
 
-      expect(await wunder.hasRole(await wunder.MINTER_ROLE(), owner.address)).to.be.false;
+      expect(await wunder.hasRole(await wunder.MINTER_ROLE(), deployer.address)).to.be.false;
     })
 
-    it("Should not have granted owner PAUSER_ROLE to deployer (owner)", async () => {
-      const { wunder, owner } = await loadFixture(deployWunder);
+    it("Should not have granted PAUSER_ROLE to deployer after deployment", async () => {
+      const { wunder, deployer } = await loadFixture(deployWunder);
 
-      expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), owner.address)).to.be.false;
+      expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), deployer.address)).to.be.false;
     });
 
-    it("Should not have granted owner BURNER_ROLE to deployer (owner)", async () => {
-      const { wunder, owner } = await loadFixture(deployWunder);
+    it("Should not have granted BURNER_ROLE to deployer after deployment", async () => {
+      const { wunder, deployer } = await loadFixture(deployWunder);
 
-      expect(await wunder.hasRole(await wunder.BURNER_ROLE(), owner.address)).to.be.false;
+      expect(await wunder.hasRole(await wunder.BURNER_ROLE(), deployer.address)).to.be.false;
     });
 
-    it("Should not have granted owner GOVERN_ROLE to deployer (owner)", async () => {
-      const { wunder, owner } = await loadFixture(deployWunder);
-
-      expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), owner.address)).to.be.false;
-    });
   });
 
   describe("Roles", () => {
     describe("Granting", () => {
       it("Should be able to grant MINTER_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+        // confirm deployer has DEFAULT_ADMIN_ROLE
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
 
-        // confirm notOwner doens't have MINTER_ROLE
-        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doens't have MINTER_ROLE
+        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), acc1.address)).to.be.false;
 
-        // grant MINTER_ROLE to notOwner
-        await wunder.grantRole(await wunder.MINTER_ROLE(), notOwner.address);
+        // grant MINTER_ROLE to acc1
+        await wunder.grantRole(await wunder.MINTER_ROLE(), acc1.address);
 
-        // confirm notOwner has MINTER_ROLE
-        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), notOwner.address)).to.be.true;
+        // confirm acc1 has MINTER_ROLE
+        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), acc1.address)).to.be.true;
       });
 
       it("Should be able to grant BURNER_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+        // confirm deployer has DEFAULT_ADMIN_ROLE
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
 
-        // confirm notOwner doens't have BURNER_ROLE
-        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doens't have BURNER_ROLE
+        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), acc1.address)).to.be.false;
 
-        // grant BURNER_ROLE to notOwner
-        await wunder.grantRole(await wunder.BURNER_ROLE(), notOwner.address);
+        // grant BURNER_ROLE to acc1
+        await wunder.grantRole(await wunder.BURNER_ROLE(), acc1.address);
 
-        // confirm notOwner has BURNER_ROLE
-        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), notOwner.address)).to.be.true;
-      });
-
-      it("Should be able to grant GOVERN_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
-
-        // confirm notOwner doens't have GOVERN_ROLE
-        expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), notOwner.address)).to.be.false;
-
-        // grant GOVERN_ROLE to notOwner
-        await wunder.grantRole(await wunder.GOVERN_ROLE(), notOwner.address);
-
-        // confirm notOwner has GOVERN_ROLE
-        expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), notOwner.address)).to.be.true;
+        // confirm acc1 has BURNER_ROLE
+        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), acc1.address)).to.be.true;
       });
 
       it("Should be able to grant PAUSER_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+        // confirm deployer has DEFAULT_ADMIN_ROLE
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
 
-        // confirm notOwner doens't have PAUSER_ROLE
-        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doens't have PAUSER_ROLE
+        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), acc1.address)).to.be.false;
 
-        // grant PAUSER_ROLE to notOwner
-        await wunder.grantRole(await wunder.PAUSER_ROLE(), notOwner.address);
+        // grant PAUSER_ROLE to acc1
+        await wunder.grantRole(await wunder.PAUSER_ROLE(), acc1.address);
 
-        // confirm notOwner has PAUSER_ROLE
-        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), notOwner.address)).to.be.true;
+        // confirm acc1 has PAUSER_ROLE
+        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), acc1.address)).to.be.true;
       });
 
+      it("Shouldn't be able to grant any role if not DEFAULT_ADMIN_ROLE", async () => {
+        const { wunder, acc1, acc2 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), acc1.address)).to.be.false;
+
+        await expect(wunder.connect(acc1).grantRole(await wunder.MINTER_ROLE(), acc2.address)).to.be.revertedWith(REVERT_MESSAGES.missingRole(await wunder.DEFAULT_ADMIN_ROLE(), acc1.address));
+        await expect(wunder.connect(acc1).grantRole(await wunder.BURNER_ROLE(), acc2.address)).to.be.revertedWith(REVERT_MESSAGES.missingRole(await wunder.DEFAULT_ADMIN_ROLE(), acc1.address));
+        await expect(wunder.connect(acc1).grantRole(await wunder.PAUSER_ROLE(), acc2.address)).to.be.revertedWith(REVERT_MESSAGES.missingRole(await wunder.DEFAULT_ADMIN_ROLE(), acc1.address));
+      });
+
+      it("Can't grant DEFAULT_ADMIN_ROLE directly - ensuring only 1 DEFAULT_ADMIN_ROLE", async () => {
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
+
+        await expect(wunder.grantRole(await wunder.DEFAULT_ADMIN_ROLE(), acc1.address)).to.be.revertedWith(REVERT_MESSAGES.noDirectAdminGrant);
+      });
+
+      it("Can't transfer DEFAULT_ADMIN_ROLE if not waiting pending period", async () => {
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+
+        // confirm deployer has DEFAULT_ADMIN_ROLE  
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
+
+        // transfer DEFAULT_ADMIN_ROLE to acc1
+        await wunder.beginDefaultAdminTransfer(acc1.address);
+
+        const { newAdmin, schedule } = await wunder.pendingDefaultAdmin();
+
+        await time.increaseTo(schedule - 1);
+
+
+        await expect(wunder.connect(acc1).acceptDefaultAdminTransfer()).to.be.revertedWith(REVERT_MESSAGES.deplayNotPassed);
+
+
+
+      });
+
+      it("Can transfer DEFAULT_ADMIN_ROLE by waiting pending period", async () => {
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+
+        // confirm deployer has DEFAULT_ADMIN_ROLE  
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
+
+        // transfer DEFAULT_ADMIN_ROLE to acc1
+        await wunder.beginDefaultAdminTransfer(acc1.address);
+
+        const { newAdmin, schedule } = await wunder.pendingDefaultAdmin();
+        await time.increaseTo(schedule);
+        await wunder.connect(acc1).acceptDefaultAdminTransfer();
+
+        // confirm deployer doesn't have DEFAULT_ADMIN_ROLE
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.false;
+
+      });
     });
 
     describe("Revoking", () => {
       it("Should be able to revoke MINTER_ROLE as DEFAULT_ADMIN_ROLE", async () => {
         // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
 
-        // confirm notOwner doens't have MINTER_ROLE
-        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doens't have MINTER_ROLE
+        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), acc1.address)).to.be.false;
 
-        // grant MINTER_ROLE to notOwner
-        await wunder.grantRole(await wunder.MINTER_ROLE(), notOwner.address);
+        // grant MINTER_ROLE to acc1
+        await wunder.grantRole(await wunder.MINTER_ROLE(), acc1.address);
 
-        // confirm notOwner has MINTER_ROLE
-        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), notOwner.address)).to.be.true;
+        // confirm acc1 has MINTER_ROLE
+        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), acc1.address)).to.be.true;
 
-        // revoke MINTER_ROLE from notOwner
-        await wunder.revokeRole(await wunder.MINTER_ROLE(), notOwner.address);
+        // revoke MINTER_ROLE from acc1
+        await wunder.revokeRole(await wunder.MINTER_ROLE(), acc1.address);
 
-        // confirm notOwner doesn't have MINTER_ROLE
-        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doesn't have MINTER_ROLE
+        expect(await wunder.hasRole(await wunder.MINTER_ROLE(), acc1.address)).to.be.false;
       });
 
       it("Should be able to revoke BURNER_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+        // confirm deployer has DEFAULT_ADMIN_ROLE
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
 
-        // confirm notOwner doens't have BURNER_ROLE
-        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doens't have BURNER_ROLE
+        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), acc1.address)).to.be.false;
 
-        // grant BURNER_ROLE to notOwner
-        await wunder.grantRole(await wunder.BURNER_ROLE(), notOwner.address);
+        // grant BURNER_ROLE to acc1
+        await wunder.grantRole(await wunder.BURNER_ROLE(), acc1.address);
 
-        // confirm notOwner has BURNER_ROLE
-        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), notOwner.address)).to.be.true;
+        // confirm acc1 has BURNER_ROLE
+        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), acc1.address)).to.be.true;
 
-        // revoke BURNER_ROLE from notOwner
-        await wunder.revokeRole(await wunder.BURNER_ROLE(), notOwner.address);
+        // revoke BURNER_ROLE from acc1
+        await wunder.revokeRole(await wunder.BURNER_ROLE(), acc1.address);
 
-        // confirm notOwner doesn't have BURNER_ROLE
-        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doesn't have BURNER_ROLE
+        expect(await wunder.hasRole(await wunder.BURNER_ROLE(), acc1.address)).to.be.false;
       });
 
-      it("Should be able to revoke GOVERN_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
-
-        // confirm notOwner doens't have GOVERN_ROLE
-        expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), notOwner.address)).to.be.false;
-
-        // grant GOVERN_ROLE to notOwner
-        await wunder.grantRole(await wunder.GOVERN_ROLE(), notOwner.address);
-
-        // confirm notOwner has GOVERN_ROLE
-        expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), notOwner.address)).to.be.true;
-
-        // revoke GOVERN_ROLE from notOwner
-        await wunder.revokeRole(await wunder.GOVERN_ROLE(), notOwner.address);
-
-        // confirm notOwner doesn't have GOVERN_ROLE
-        expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), notOwner.address)).to.be.false;
-      });
 
       it("Should be able to revoke PAUSER_ROLE as DEFAULT_ADMIN_ROLE", async () => {
-        // confirm owner has DEFAULT_ADMIN_ROLE
-        const { wunder, owner, notOwner } = await loadFixture(deployWunder);
-        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), owner.address)).to.be.true;
+        // confirm deployer has DEFAULT_ADMIN_ROLE
+        const { wunder, deployer, acc1 } = await loadFixture(deployWunder);
+        expect(await wunder.hasRole(await wunder.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
 
-        // confirm notOwner doens't have PAUSER_ROLE
-        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doens't have PAUSER_ROLE
+        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), acc1.address)).to.be.false;
 
-        // grant PAUSER_ROLE to notOwner
-        await wunder.grantRole(await wunder.PAUSER_ROLE(), notOwner.address);
+        // grant PAUSER_ROLE to acc1
+        await wunder.grantRole(await wunder.PAUSER_ROLE(), acc1.address);
 
-        // confirm notOwner has PAUSER_ROLE
-        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), notOwner.address)).to.be.true;
+        // confirm acc1 has PAUSER_ROLE
+        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), acc1.address)).to.be.true;
 
-        // revoke PAUSER_ROLE from notOwner
-        await wunder.revokeRole(await wunder.PAUSER_ROLE(), notOwner.address);
+        // revoke PAUSER_ROLE from acc1
+        await wunder.revokeRole(await wunder.PAUSER_ROLE(), acc1.address);
 
-        // confirm notOwner doesn't have PAUSER_ROLE
-        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), notOwner.address)).to.be.false;
+        // confirm acc1 doesn't have PAUSER_ROLE
+        expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), acc1.address)).to.be.false;
       });
-
-
     });
 
     describe("Methods", () => {
       describe("MINTER_ROLE", () => {
-        it("Should be able to `mint` Wunder as MINTER_ROLE", async () => {
-          const { wunder, owner, minter } = await loadFixture(deployWunder);
-          // confirm minter doens't have MINTER_ROLE
-          expect(await wunder.hasRole(await wunder.MINTER_ROLE(), minter.address))
-            .to
-            .be
-            .false;
 
-          // grant MINTER_ROLE to minter
-          await wunder
-            .connect(owner)
-            .grantRole(await wunder.MINTER_ROLE(), minter.address);
+        it("Should be able to batchMint Wunder as MINTER_ROLE", async () => {
+          const { wunder, minter } = await loadFixture(deployWithRolesAppliedWunder);
 
           // confirm minter has MINTER_ROLE
           expect(await wunder.hasRole(await wunder.MINTER_ROLE(), minter.address)).to.be.true;
@@ -312,14 +300,14 @@ describe("Wunder", () => {
           // mint 100 Wunder to minter
           await wunder
             .connect(minter)
-            .mint(minter.address, 100);
+            .batchMint([minter.address], [100]);
 
           // confirm minter has 100 Wunder
           expect(await wunder.balanceOf(minter.address)).to.equal(100);
 
         });
 
-        it("Shouldn't be able to `mint` Wunder as not MINTER_ROLE", async () => {
+        it("Shouldn't be able to batchMint Wunder as not MINTER_ROLE", async () => {
           const { wunder, minter } = await loadFixture(deployWunder);
           // confirm minter doens't have MINTER_ROLE
           expect(await wunder.hasRole(await wunder.MINTER_ROLE(), minter.address)).to.be.false;
@@ -327,7 +315,7 @@ describe("Wunder", () => {
           // mint 100 Wunder to minter
           await expect(wunder
             .connect(minter)
-            .mint(minter.address, 100))
+            .batchMint([minter.address], [100]))
             .to
             .be
             .revertedWith(accessControlMessage(await wunder.MINTER_ROLE(), minter.address));
@@ -338,16 +326,7 @@ describe("Wunder", () => {
       describe("BURNER_ROLE", () => {
 
         it("Should be able to `burn` Wunder as BURNER_ROLE", async () => {
-          const { wunder, owner, burner } = await loadFixture(deployWunder);
-
-          // confirm burner doens't have BURNER_ROLE
-          expect(await wunder.hasRole(await wunder.BURNER_ROLE(), burner.address))
-            .to
-            .be
-            .false;
-
-          // grant BURNER_ROLE to burner
-          await wunder.connect(owner).grantRole(await wunder.BURNER_ROLE(), burner.address);
+          const { wunder, burner, minter } = await loadFixture(deployWithRolesAppliedWunder);
 
           // confirm burner has BURNER_ROLE
           expect(await wunder.hasRole(await wunder.BURNER_ROLE(), burner.address))
@@ -355,10 +334,9 @@ describe("Wunder", () => {
             .be
             .true;
 
-          await wunder.connect(owner).grantRole(await wunder.MINTER_ROLE(), burner.address);
 
           // mint 100 Wunder to burner
-          await wunder.connect(burner).mint(burner.address, 100);
+          await wunder.connect(minter).batchMint([burner.address], [100]);
 
           // confirm burner has 100 Wunder
           expect(await wunder.balanceOf(burner.address)).to.equal(100);
@@ -388,207 +366,10 @@ describe("Wunder", () => {
 
       });
 
-      describe("GOVERN_ROLE", () => {
-
-        // function freeze(address account)
-        it("Should be able to `freeze` an account as GOVERN_ROLE", async () => {
-          const { wunder, owner, governor, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address))
-            .to
-            .be
-            .false;
-
-          // grant GOVERN_ROLE to governor
-          await wunder.connect(owner).grantRole(await wunder.GOVERN_ROLE(), governor.address);
-
-          // confirm governor has GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.true;
-
-          // confirm acc1 is not frozen
-          expect(await wunder.isFrozen(acc1.address)).to.be.false;
-
-          // freeze acc1
-          await wunder.connect(governor).freeze(acc1.address);
-
-          // confirm acc1 is frozen
-          expect(await wunder.isFrozen(acc1.address)).to.be.true;
-        });
-
-        it("Shouldn't be able to `freeze` an account as not GOVERN_ROLE", async () => {
-          const { wunder, governor, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address))
-            .to
-            .be
-            .false;
-
-          // freeze acc1
-          await expect(wunder.connect(governor).freeze(acc1.address))
-            .to
-            .be
-            .revertedWith(accessControlMessage(await wunder.GOVERN_ROLE(), governor.address));
-        });
-
-        // function unfreeze(address account)
-        it("Should be able to `unfreeze` an account as GOVERN_ROLE", async () => {
-          const { wunder, owner, governor, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.false;
-
-          // grant GOVERN_ROLE to governor
-          await wunder.connect(owner).grantRole(await wunder.GOVERN_ROLE(), governor.address);
-
-          // confirm governor has GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.true;
-
-          // confirm acc1 is not frozen
-          expect(await wunder.isFrozen(acc1.address)).to.be.false;
-
-          // freeze acc1
-          await wunder.connect(governor).freeze(acc1.address);
-
-          // confirm acc1 is frozen
-          expect(await wunder.isFrozen(acc1.address)).to.be.true;
-
-          // unfreeze acc1
-          await wunder.connect(governor).unfreeze(acc1.address);
-
-          // confirm acc1 is not frozen
-          expect(await wunder.isFrozen(acc1.address)).to.be.false;
-        });
-
-        it("Shouldn't be able to `unfreeze` an account as not GOVERN_ROLE", async () => {
-          const { wunder, governor, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.false;
-
-          // unfreeze acc1
-          await expect(wunder.connect(governor).unfreeze(acc1.address))
-            .to
-            .be
-            .revertedWith(accessControlMessage(await wunder.GOVERN_ROLE(), governor.address));
-        });
-
-        // function seize(address account)
-        it("Should be able to `seize` an account as GOVERN_ROLE", async () => {
-          const { wunder, owner, governor, minter, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.false;
-          // grant GOVERN_ROLE to governor
-          await wunder.connect(owner).grantRole(await wunder.GOVERN_ROLE(), governor.address);
-          // confirm governor has GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.true;
-
-          // grant MINTER_ROLE to minter
-          await wunder.connect(owner).grantRole(await wunder.MINTER_ROLE(), minter.address);
-
-          // mint 100 Wunder to acc1
-          await wunder.connect(minter).mint(acc1.address, 100);
-
-          // confirm acc1 has 100 Wunder
-          expect(await wunder.balanceOf(acc1.address)).to.equal(100);
-
-          // confirm wunder contract has 0 Wunder
-          expect(await wunder.balanceOf(wunder.address)).to.equal(0);
-
-          // freeze acc1 (acc1 is not frozen)
-          await wunder.connect(governor).freeze(acc1.address);
-
-          // seize acc1
-          await wunder.connect(governor).seize(acc1.address);
-
-          // confirm acc1 has 0 Wunder
-          expect(await wunder.balanceOf(acc1.address)).to.equal(0);
-
-          // confirm wunder contract has 100 Wunder
-          expect(await wunder.balanceOf(wunder.address)).to.equal(100);
-
-        });
-
-        it("Shouldn't be able to `seize` an account as not GOVERN_ROLE", async () => {
-          const { wunder, governor, minter, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.false;
-
-          // seize acc1
-          await expect(wunder.connect(governor).seize(acc1.address))
-            .to
-            .be
-            .revertedWith(accessControlMessage(await wunder.GOVERN_ROLE(), governor.address));
-        });
-
-
-        // function withdraw(uint256 amount)
-        it("Should be able to `withdraw` Wunder as GOVERN_ROLE", async () => {
-          const { wunder, owner, governor, minter, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.false;
-          // grant GOVERN_ROLE to governor
-          await wunder.connect(owner).grantRole(await wunder.GOVERN_ROLE(), governor.address);
-          // confirm governor has GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.true;
-
-          // grant MINTER_ROLE to minter
-          await wunder.connect(owner).grantRole(await wunder.MINTER_ROLE(), minter.address);
-
-          // mint 100 Wunder to acc1
-          await wunder.connect(minter).mint(acc1.address, 100);
-
-          // confirm acc1 has 100 Wunder
-          expect(await wunder.balanceOf(acc1.address)).to.equal(100);
-
-          // confirm wunder contract has 0 Wunder
-          expect(await wunder.balanceOf(wunder.address)).to.equal(0);
-
-          // freeze acc1 (acc1 is not frozen)
-          await wunder.connect(governor).freeze(acc1.address);
-
-          // seize acc1
-          await wunder.connect(governor).seize(acc1.address);
-
-          // confirm acc1 has 0 Wunder
-          expect(await wunder.balanceOf(acc1.address)).to.equal(0);
-
-          // confirm wunder contract has 100 Wunder
-          expect(await wunder.balanceOf(wunder.address)).to.equal(100);
-
-          // withdraw 100 Wunder
-          await wunder.connect(governor).withdraw(100);
-
-          // confirm acc1 has 0 Wunder
-          expect(await wunder.balanceOf(acc1.address)).to.equal(0);
-
-          // confirm wunder contract has 0 Wunder
-          expect(await wunder.balanceOf(wunder.address)).to.equal(0);
-
-          // confirm governor has 100 Wunder
-          expect(await wunder.balanceOf(governor.address)).to.equal(100);
-
-        });
-
-        it("Shouldn't be able to `withdraw` Wunder as not GOVERN_ROLE", async () => {
-          const { wunder, governor, minter, acc1 } = await loadFixture(deployWunder);
-          // confirm governor doens't have GOVERN_ROLE
-          expect(await wunder.hasRole(await wunder.GOVERN_ROLE(), governor.address)).to.be.false;
-
-          // withdraw 100 Wunder
-          await expect(wunder.connect(governor).withdraw(100))
-            .to
-            .be
-            .revertedWith(accessControlMessage(await wunder.GOVERN_ROLE(), governor.address));
-        });
-      });
-
       describe("PAUSER_ROLE", () => {
         // function pause() public onlyRole(PAUSER_ROLE)
         it("Should be able to `pause` as PAUSER_ROLE", async () => {
-          const { wunder, owner, pauser } = await loadFixture(deployWunder);
-          // confirm pauser doens't have PAUSER_ROLE
-          expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), pauser.address)).to.be.false;
-
-          // grant PAUSER_ROLE to pauser
-          await wunder.connect(owner).grantRole(await wunder.PAUSER_ROLE(), pauser.address);
+          const { wunder, pauser } = await loadFixture(deployWithRolesAppliedWunder);
 
           // confirm pauser has PAUSER_ROLE
           expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), pauser.address)).to.be.true;
@@ -620,15 +401,7 @@ describe("Wunder", () => {
 
         // function unpause() public onlyRole(PAUSER_ROLE)
         it("Should be able to `unpause` as PAUSER_ROLE", async () => {
-          const { wunder, owner, pauser } = await loadFixture(deployWunder);
-          // confirm pauser doens't have PAUSER_ROLE
-          expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), pauser.address)).to.be.false;
-
-          // grant PAUSER_ROLE to pauser
-          await wunder.connect(owner).grantRole(await wunder.PAUSER_ROLE(), pauser.address);
-
-          // confirm pauser has PAUSER_ROLE
-          expect(await wunder.hasRole(await wunder.PAUSER_ROLE(), pauser.address)).to.be.true;
+          const { wunder, pauser } = await loadFixture(deployWithRolesAppliedWunder);
 
           // confirm wunder is not paused
           expect(await wunder.paused()).to.be.false;
@@ -664,332 +437,8 @@ describe("Wunder", () => {
     });
   });
 
-  describe("Government", () => {
-    describe("Freezing ", () => {
-      it("Should be able to transfer between 2 accounts that aren't frozen", async () => {
-        const { wunder, acc1, acc2 } = await loadFixture(deployFullWunder);
-
-        // confirm acc1 and acc2 aren't frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.false;
-        expect(await wunder.isFrozen(acc2.address)).to.be.false;
-
-        // confirm acc1 has 1000 Wunder
-        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
-
-        // confirm acc2 has 1000 Wunder
-        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
-
-        // transfer 100 Wunder from acc1 to acc2
-        await wunder.connect(acc1).transfer(acc2.address, wunderToEth("100"));
-
-        // confirm acc1 has 900 Wunder
-        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("900"));
-
-        // confirm acc2 has 1100 Wunder
-        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1100"));
-      });
-
-      it("Should not be able to transfer if source account is frozen", async () => {
-        const { wunder, governor, acc1, acc2 } = await loadFixture(deployFullWunder);
-
-        const src = acc1;
-        const dst = acc2;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // freeze src
-        await wunder.connect(governor).freeze(src.address);
-
-        // confirm src is frozen
-        expect(await wunder.isFrozen(src.address)).to.be.true;
-
-        // confirm dst is not frozen
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // transfer 100 Wunder from src to dst
-        await expect(wunder.connect(src).transfer(dst.address, wunderToEth("100")))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-      });
-
-      it("Should not be able to transfer if destination account is frozen", async () => {
-        const { wunder, governor, acc1, acc2 } = await loadFixture(deployFullWunder);
-
-        const src = acc1;
-        const dst = acc2;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // freeze dst
-        await wunder.connect(governor).freeze(dst.address);
-
-        // confirm src is not frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-
-        // confirm dst is frozen
-        expect(await wunder.isFrozen(dst.address)).to.be.true;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // transfer 100 Wunder from src to dst
-        await expect(wunder.connect(src).transfer(dst.address, wunderToEth("100")))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-      });
-
-      it("Should not be able to transfer if both source and destination accounts are frozen", async () => {
-        const { wunder, governor, acc1, acc2 } = await loadFixture(deployFullWunder);
-
-        const src = acc1;
-        const dst = acc2;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // freeze src
-        await wunder.connect(governor).freeze(src.address);
-
-        // freeze dst
-        await wunder.connect(governor).freeze(dst.address);
-
-        // confirm src is frozen
-        expect(await wunder.isFrozen(src.address)).to.be.true;
-
-        // confirm dst is frozen
-        expect(await wunder.isFrozen(dst.address)).to.be.true;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // transfer 100 Wunder from src to dst
-        await expect(wunder.connect(src).transfer(dst.address, wunderToEth("100")))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-      });
-
-      it("Should not be able to freeze an account if it is already frozen", async () => {
-        const { wunder, governor, acc1 } = await loadFixture(deployFullWunder);
-
-        // confirm acc1 isn't frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.false;
-
-        // freeze acc1
-        await wunder.connect(governor).freeze(acc1.address);
-
-        // confirm acc1 is frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.true;
-
-        // freeze acc1 again
-        await expect(wunder.connect(governor).freeze(acc1.address))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm acc1 is still frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.true;
-      });
-
-      it("Should not be able to unfreeze an account if it is not frozen", async () => {
-        const { wunder, governor, acc1 } = await loadFixture(deployFullWunder);
-
-        // confirm acc1 isn't frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.false;
-
-        // unfreeze acc1
-        await expect(wunder.connect(governor).unfreeze(acc1.address))
-          .to
-          .be
-          .revertedWith("Wunder: Account is not frozen");
-
-        // confirm acc1 is still not frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.false;
-      });
-
-      it("Should not be able to mint to a frozen account", async () => {
-        const { wunder, governor, minter, acc1 } = await loadFixture(deployFullWunder);
-
-        // confirm acc1 isn't frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.false;
-
-        // freeze acc1
-        await wunder.connect(governor).freeze(acc1.address);
-
-        // confirm acc1 is frozen
-        expect(await wunder.isFrozen(acc1.address)).to.be.true;
-
-        // confirm acc1 has 1000 Wunder
-        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
-
-        // mint 100 Wunder to acc1
-        await expect(wunder.connect(minter).mint(acc1.address, wunderToEth("100")))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm acc1 still has 1000 Wunder
-        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
-      });
-
-      it("Should not be able to transfer to a frozen account using multiTransfer", async () => {
-        const { wunder, governor, acc1, acc2, acc3 } = await loadFixture(deployFullWunder);
-
-        const src = acc1;
-        const dst = acc2;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // freeze dst
-        await wunder.connect(governor).freeze(dst.address);
-
-        // confirm src is not frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-
-        // confirm dst is frozen
-        expect(await wunder.isFrozen(dst.address)).to.be.true;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // transfer 100 Wunder from src to dst
-        await expect(wunder.connect(src)
-          .multiTransfer([acc3.address, dst.address], [wunderToEth("100"), wunderToEth("100")]))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-      });
-
-      it("Should not be able to transfer from a frozen account using multiTransferFrom", async () => {
-        const { wunder, governor, acc1, acc2, acc3 } = await loadFixture(deployFullWunder);
-
-        const src = acc1;
-        const dst = acc2;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // freeze src
-        await wunder.connect(governor).freeze(src.address);
-
-        // confirm src is frozen
-        expect(await wunder.isFrozen(src.address)).to.be.true;
-
-        // confirm dst is not frozen
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-
-        // transfer 100 Wunder from src to dst
-        await expect(wunder.connect(src)
-          .multiTransfer([acc3.address, dst.address], [wunderToEth("100"), wunderToEth("100")]))
-          .to
-          .be
-          .revertedWith("Wunder: Account is frozen");
-
-        // confirm src has 1000 Wunder
-        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
-
-        // confirm dst has 1000 Wunder
-        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
-      });
-
-    });
-
-    describe("Seizing", () => {
-
-    });
-
-    describe("Withdrawing", () => {
-
-    });
-  });
-
-  describe("Transacting", () => {
-    describe("Multitransfer", () => {
+  describe("Batch", () => {
+    describe("BatchTransfer", () => {
 
       // TODO: test multiTransfer with 0 addresses
       // TODO: test multiTransfer with 0 amounts
@@ -1000,14 +449,11 @@ describe("Wunder", () => {
       // TODO: test ERC20 allowance works with multiTransfer
 
       it("Should be able to transfer to multiple accounts", async () => {
-        const { wunder, acc1, acc2, acc3 } = await loadFixture(deployFullWunder);
+        const { wunder, acc1, acc2, acc3, minter } = await loadFixture(deployWithRolesAppliedWunder);
+
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address, acc3.address], [wunderToEth("1000"), wunderToEth("1000"), wunderToEth("1000")])
 
         const src = acc1;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(acc2.address)).to.be.false;
-        expect(await wunder.isFrozen(acc3.address)).to.be.false;
 
         // confirm src has 1000 Wunder
         expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
@@ -1018,7 +464,7 @@ describe("Wunder", () => {
 
         // transfer 100 Wunder from src to acc2 and acc3 respectively
         await wunder.connect(src)
-          .multiTransfer([acc2.address, acc3.address], [wunderToEth("100"), wunderToEth("100")]);
+          .batchTransfer([acc2.address, acc3.address], [wunderToEth("100"), wunderToEth("100")]);
 
         // confirm src has 900 Wunder
         expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("800"));
@@ -1031,15 +477,11 @@ describe("Wunder", () => {
       });
 
       it("Should be able to transfer to the same account as destination account", async () => {
-        const { wunder, acc1, acc2 } = await loadFixture(deployFullWunder);
+        const { wunder, acc1, acc2, minter } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
 
         const src = acc1;
         const dst = acc2;
-
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
-
         // confirm src has 1000 Wunder
         expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
 
@@ -1048,7 +490,7 @@ describe("Wunder", () => {
 
         await wunder
           .connect(src)
-          .multiTransfer([dst.address, dst.address], [wunderToEth("100"), wunderToEth("100")]);
+          .batchTransfer([dst.address, dst.address], [wunderToEth("100"), wunderToEth("100")]);
 
         // confirm src has 800 Wunder
         expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("800"));
@@ -1059,14 +501,12 @@ describe("Wunder", () => {
       });
 
       it("Shouldn't be able to transfer to the same destination account if src funds run out after first transfer", async () => {
-        const { wunder, acc1, acc2 } = await loadFixture(deployFullWunder);
+        const { wunder, acc1, acc2, minter } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
 
         const src = acc1;
         const dst = acc2;
 
-        // confirm src and dst aren't frozen
-        expect(await wunder.isFrozen(src.address)).to.be.false;
-        expect(await wunder.isFrozen(dst.address)).to.be.false;
 
         // confirm src has 1000 Wunder
         expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
@@ -1076,7 +516,7 @@ describe("Wunder", () => {
 
         await expect(wunder
           .connect(src)
-          .multiTransfer([dst.address, dst.address], [wunderToEth("600"), wunderToEth("600")]))
+          .batchTransfer([dst.address, dst.address], [wunderToEth("600"), wunderToEth("600")]))
           .to
           .be
           .revertedWith("ERC20: transfer amount exceeds balance");
@@ -1088,18 +528,358 @@ describe("Wunder", () => {
         expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
       });
 
+      it("Should revert if length of addresses and amounts are not equal", async () => {
+        const { wunder, acc1, acc2, minter } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        const src = acc1;
+        const dst = acc2;
+
+        // confirm src has 1000 Wunder
+        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
+
+        // confirm dst has 1000 Wunder
+        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
+
+        await expect(wunder
+          .connect(src)
+          .batchTransfer([dst.address, dst.address], [wunderToEth("600")]))
+          .to
+          .be
+          .revertedWith("Wunder: batchTransfer length mismatch");
+      });
+
+      it("Should revert if there is more than 256 addresses", async () => {
+        const { wunder, acc1, acc2, minter } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        const src = acc1;
+        const dst = acc2;
+
+        // confirm src has 1000 Wunder
+        expect(await wunder.balanceOf(src.address)).to.equal(wunderToEth("1000"));
+
+        // confirm dst has 1000 Wunder
+        expect(await wunder.balanceOf(dst.address)).to.equal(wunderToEth("1000"));
+
+        const receipients = Array(257).fill(dst.address);
+        const amounts = Array(257).fill(wunderToEth("1"));
+        await expect(wunder
+          .connect(src)
+          .batchTransfer(receipients, amounts))
+          .to
+          .be
+          .revertedWith("Wunder: recipients and amounts length must be less than 256");
+      });
+
+
     });
 
+    describe("BatchMint", () => {
+      it("Should be able to mint to multiple accounts", async () => {
+        const { wunder, acc1, acc2, acc3, minter } = await loadFixture(deployWithRolesAppliedWunder);
 
+        // confirm acc1 has 0 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(0);
+
+        // confirm acc2 has 0 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(0);
+
+        // confirm acc3 has 0 Wunder
+        expect(await wunder.balanceOf(acc3.address)).to.equal(0);
+
+        // mint 1000 Wunder to acc1, acc2 and acc3 respectively
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address, acc3.address], [wunderToEth("1000"), wunderToEth("1000"), wunderToEth("1000")])
+
+        // confirm acc1 has 1000 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc2 has 1000 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc3 has 1000 Wunder
+        expect(await wunder.balanceOf(acc3.address)).to.equal(wunderToEth("1000"));
+      });
+
+      it("Should revert if length of addresses and amounts are not equal", async () => {
+        const { wunder, acc1, acc2, minter } = await loadFixture(deployWithRolesAppliedWunder);
+
+        // confirm acc1 has 0 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(0);
+
+        // confirm acc2 has 0 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(0);
+
+        await expect(wunder
+          .connect(minter)
+          .batchMint([acc1.address, acc2.address], [wunderToEth("1000")]))
+          .to
+          .be
+          .revertedWith("Wunder: batchMint length mismatch");
+      });
+
+      it("Should revert if there is more than 256 addresses", async () => {
+        const { wunder, acc1, acc2, minter } = await loadFixture(deployWithRolesAppliedWunder);
+
+        // confirm acc1 has 0 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(0);
+
+        // confirm acc2 has 0 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(0);
+
+        const receipients = Array(257).fill(acc1.address);
+        const amounts = Array(257).fill(wunderToEth("1"));
+        await expect(wunder
+          .connect(minter)
+          .batchMint(receipients, amounts))
+          .to
+          .be
+          .revertedWith("Wunder: recipients and amounts length must be less than 256");
+      });
+    });
   });
 
   describe("Pausing/Unpausing", () => {
     describe("Methods when paused", () => {
+      // transfer, transferFrom, batchTransfer, batchMint, burn
+      it("Shouldn't be able to transfer when paused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        await expect(wunder.connect(acc1).transfer(acc2.address, wunderToEth("100"))).to.be.revertedWith("Pausable: paused");
+
+        // confirm acc1 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc2 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
+      });
+
+      it("Shouldn't be able to transferFrom when paused", async () => {
+        const { wunder, acc1, acc2, acc3, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // approve acc3 to spend 100 Wunder from acc1
+        await wunder.connect(acc1).approve(acc3.address, wunderToEth("100"));
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        await expect(wunder.connect(acc3).transferFrom(acc1.address, acc2.address, wunderToEth("100"))).to.be.revertedWith("Pausable: paused");
+
+        // confirm acc1 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc2 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
+      });
+
+      it("Shouldn't be able to batchTransfer when paused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        await expect(wunder.connect(acc1).batchTransfer([acc2.address, acc2.address], [wunderToEth("100"), wunderToEth("100")])).to.be.revertedWith("Pausable: paused");
+
+        // confirm acc1 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc2 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
+      });
+
+      it("Shouldn't be able to batchMint when paused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        await expect(wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])).to.be.revertedWith("Pausable: paused");
+
+        // confirm acc1 still has 0 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(0);
+
+        // confirm acc2 still has 0 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(0);
+      });
+
+      it("Shouldn't be able to burn when paused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        await expect(wunder.connect(acc1).burn(wunderToEth("100"))).to.be.revertedWith("Pausable: paused");
+
+        // confirm acc1 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc2 still has 1000 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
+      });
 
     });
 
 
     describe("Methods when unpaused", () => {
+      it("should be able to transfer when unpaused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        // unpause the contract
+        await wunder.connect(pauser).unpause();
+
+        // confirm contract is unpaused
+        expect(await wunder.paused()).to.be.false;
+
+        // transfer 100 Wunder from acc1 to acc2
+        await wunder.connect(acc1).transfer(acc2.address, wunderToEth("100"));
+
+        // confirm acc1 has 900 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("900"));
+
+        // confirm acc2 has 1100 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1100"));
+      });
+
+      it("should be able to transferFrom when unpaused", async () => {
+        const { wunder, acc1, acc2, acc3, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // approve acc3 to spend 100 Wunder from acc1
+        await wunder.connect(acc1).approve(acc3.address, wunderToEth("100"));
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        // unpause the contract
+        await wunder.connect(pauser).unpause();
+
+        // confirm contract is unpaused
+        expect(await wunder.paused()).to.be.false;
+
+        // transfer 100 Wunder from acc1 to acc2
+        await wunder.connect(acc3).transferFrom(acc1.address, acc2.address, wunderToEth("100"));
+
+        // confirm acc1 has 900 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("900"));
+
+        // confirm acc2 has 1100 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1100"));
+      });
+
+      it("Should be able to batchTransfer when unpaused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")])
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        // unpause the contract
+        await wunder.connect(pauser).unpause();
+
+        // confirm contract is unpaused
+        expect(await wunder.paused()).to.be.false;
+
+        // transfer 100 Wunder from acc1 to acc2
+        await wunder.connect(acc1).batchTransfer([acc2.address, acc2.address], [wunderToEth("100"), wunderToEth("100")]);
+
+        // confirm acc1 has 900 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("800"));
+
+        // confirm acc2 has 1100 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1200"));
+      });
+
+      it("Should be able to batchMint when unpaused", async () => {
+        const { wunder, acc1, acc2, minter, pauser } = await loadFixture(deployWithRolesAppliedWunder);
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        // unpause the contract
+        await wunder.connect(pauser).unpause();
+
+        // confirm contract is unpaused
+        expect(await wunder.paused()).to.be.false;
+
+        // mint 1000 Wunder to acc1 and acc2
+        await wunder.connect(minter).batchMint([acc1.address, acc2.address], [wunderToEth("1000"), wunderToEth("1000")]);
+
+        // confirm acc1 has 1000 Wunder
+        expect(await wunder.balanceOf(acc1.address)).to.equal(wunderToEth("1000"));
+
+        // confirm acc2 has 1000 Wunder
+        expect(await wunder.balanceOf(acc2.address)).to.equal(wunderToEth("1000"));
+      });
+
+      it("Should be able to burn when unpaused", async () => {
+        const { wunder, acc1, minter, pauser, burner } = await loadFixture(deployWithRolesAppliedWunder);
+        await wunder.connect(minter).batchMint([acc1.address], [wunderToEth("1000")])
+
+        // pause the contract
+        await wunder.connect(pauser).pause();
+
+        // confirm contract is paused
+        expect(await wunder.paused()).to.be.true;
+
+        // unpause the contract
+        await wunder.connect(pauser).unpause();
+
+        // confirm contract is unpaused
+        expect(await wunder.paused()).to.be.false;
+
+        const totalSupply = await wunder.totalSupply();
+        expect(totalSupply).to.equal(wunderToEth("1000"));
+
+        // burn 100 Wunder from acc1
+        await wunder.connect(acc1).transfer(burner.address, wunderToEth("100"));
+        await wunder.connect(burner).burn(wunderToEth("100"));
+
+        // confirm total supply is 900 Wunder
+        expect(await wunder.totalSupply()).to.equal(wunderToEth("900"));
+
+      });
+
+
+
+
 
     });
 
@@ -1107,26 +887,25 @@ describe("Wunder", () => {
 
   describe("Interfaces", () => {
     it("Should implement IERC20", async () => {
-      const { wunder } = await loadFixture(deployFullWunder);
+      const { wunder } = await loadFixture(deployWithRolesAppliedWunder);
 
       expect(await wunder.supportsInterface(INTERFACE_IDS.IERC20)).to.be.true;
     });
 
     it("Should implement IERC165", async () => {
-      const { wunder } = await loadFixture(deployFullWunder);
+      const { wunder } = await loadFixture(deployWithRolesAppliedWunder);
 
       expect(await wunder.supportsInterface(INTERFACE_IDS.IERC165)).to.be.true;
     });
 
     it("Should implement IWunder", async () => {
-      const { wunder } = await loadFixture(deployFullWunder);
-
+      const { wunder } = await loadFixture(deployWithRolesAppliedWunder);
 
       expect(await wunder.supportsInterface(INTERFACE_IDS.IWunder)).to.be.true;
     });
 
     it("Should implement IAccessControl", async () => {
-      const { wunder } = await loadFixture(deployFullWunder);
+      const { wunder } = await loadFixture(deployWithRolesAppliedWunder);
 
       expect(await wunder.supportsInterface(INTERFACE_IDS.IAccessControl)).to.be.true;
     });
@@ -1135,16 +914,14 @@ describe("Wunder", () => {
 
   });
 
-
   describe("GAS Usage", () => {
 
     it("Evaluate GAS costs for 10 transactions of different sizes between acc1, acc2 and acc3", async () => {
-      const { wunder, owner, acc1, acc2, acc3 } = await loadFixture(deployFullWunder);
+      const { wunder, acc1, acc2, acc3, minter } = await loadFixture(deployWithRolesAppliedWunder);
 
-      // confirm acc1 and acc2 aren't frozen
-      expect(await wunder.isFrozen(acc1.address)).to.be.false;
-      expect(await wunder.isFrozen(acc2.address)).to.be.false;
-      expect(await wunder.isFrozen(acc3.address)).to.be.false;
+      await wunder.connect(minter).batchMint([acc1.address, acc2.address, acc3.address], [wunderToEth("1000"), wunderToEth("1000"), wunderToEth("1000")])
+
+
       for (let i = 0; i < 10; i++) {
         const amount = Math.floor(Math.random() * 1000);
         await wunder.connect(acc1).transfer(acc2.address, amount);
@@ -1154,12 +931,8 @@ describe("Wunder", () => {
     });
 
     it("Evaluate GAs cost for 10 multi transactions of different sizes between acc1, acc2 and acc3", async () => {
-      const { wunder, owner, acc1, acc2, acc3 } = await loadFixture(deployFullWunder);
-
-      // confirm acc1 and acc2 aren't frozen
-      expect(await wunder.isFrozen(acc1.address)).to.be.false;
-      expect(await wunder.isFrozen(acc2.address)).to.be.false;
-      expect(await wunder.isFrozen(acc3.address)).to.be.false;
+      const { wunder, acc1, acc2, acc3, minter } = await loadFixture(deployWithRolesAppliedWunder);
+      await wunder.connect(minter).batchMint([acc1.address, acc2.address, acc3.address], [wunderToEth("1000"), wunderToEth("1000"), wunderToEth("1000")])
 
 
       let acc2Total = wunderToEth("1000");
@@ -1172,7 +945,7 @@ describe("Wunder", () => {
         acc3Total = acc3Total.add(acc3Amount);
 
 
-        await wunder.connect(acc1).multiTransfer(
+        await wunder.connect(acc1).batchTransfer(
           [acc2.address, acc3.address],
           [acc2Amount, acc3Amount]
         );
@@ -1184,3 +957,4 @@ describe("Wunder", () => {
     });
   });
 });
+

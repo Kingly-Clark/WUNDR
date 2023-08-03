@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity 0.8.18;
 
-// import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/AccessControlDefaultAdminRules.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -21,32 +20,18 @@ contract Wunder is
      * See {IERC20-constructor}.
      *
      * @dev Grants `DEFAULT_ADMIN_ROLE` to the account that deploys the contract.
+     * Uses AccessControlDefaultAdminRules to be able to revoke DEFAULT_ADMIN_ROLE later.
      *
      * Further roles can be granted by the deployer wallets by calling {grantRole}.
      *
      */
     constructor()
-        ERC20("Wunderpar Token", "Wunder")
+        ERC20("Wunderpar", "WUNDR")
         AccessControlDefaultAdminRules(
             3 days,
             msg.sender // Explicit initial `DEFAULT_ADMIN_ROLE` holder
         )
     {}
-
-    /**
-     * @dev See {ERC20-_mint}.
-     *
-     * Requirements:
-     * - contract must not be paused.
-     * - caller must have the `MINTER_ROLE`.
-     * - account must not be frozen.
-     */
-    function mint(
-        address account,
-        uint256 amount
-    ) public whenNotPaused onlyRole(MINTER_ROLE) {
-        _mint(account, amount);
-    }
 
     /**
      * @dev See {ERC20-_burn}.
@@ -100,7 +85,7 @@ contract Wunder is
     ) external override whenNotPaused {
         require(
             recipients.length == amounts.length,
-            "Wunder: recipients and amounts length mismatch"
+            "Wunder: batchTransfer length mismatch"
         );
 
         require(
@@ -110,8 +95,6 @@ contract Wunder is
 
         for (uint256 i = 0; i < recipients.length; i++) {
             address to = recipients[i];
-            require(to != address(0), "Wunder: transfer to the zero address");
-
             _transfer(_msgSender(), to, amounts[i]);
         }
 
@@ -124,7 +107,7 @@ contract Wunder is
     ) external override whenNotPaused onlyRole(MINTER_ROLE) {
         require(
             recipients.length == amounts.length,
-            "Wunder: recipients and amounts length mismatch"
+            "Wunder: batchMint length mismatch"
         );
 
         require(
@@ -133,11 +116,7 @@ contract Wunder is
         );
 
         for (uint256 i = 0; i < recipients.length; i++) {
-            address to = recipients[i];
-            require(to != address(0), "Wunder: mint to the zero address");
-
-            uint256 amount = amounts[i];
-            _mint(to, amount);
+            _mint(recipients[i], amounts[i]);
         }
 
         emit BatchMint(_msgSender(), recipients, amounts);
