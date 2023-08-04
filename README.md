@@ -6,23 +6,10 @@ Our mission is to enhance the golf experience for players of all skill levels an
 
 Trezor Suite settings --> Device and change the "Safety Check" option to prompt, you'll be able to send the transactions.
 
-Testnet:
+## Deployments:
 
-```
-Testnet WUNDR deployed to: 0x041C8f13786E3972EB34502aC82B12999EA9084A
-```
-
-Staging:
-
-```
-SWUNDR on mainnet at: 0xA201D1aB2264c19893Ebe489280c1456a8B29EB6
-with minter role granted to 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B
-```
-
-Prod:
-
-```
-Deployer: 0x048b89AB8669BE06DAB148B0806d7274541257C9
-Wunder address: 0x5a242099C159722a5E44798AeABe54cAbCd844BB
-Granting MINTER_ROLE to 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B
-```
+| Environment | Chain   | DEFAULT_ADMIN                              | Wunder Address                             | MINTER_ROLE Recipient                      |
+| ----------- | ------- | ------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
+| Testnet     | Mumbai  | 0xA04703511790408902F71Bb2230c23591c4c54C4 | 0x0c9Ff5D08930F6993CE0D88E83890746942367aF | 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B |
+| Staging     | Polygon | 0xA04703511790408902F71Bb2230c23591c4c54C4 | 0x3a8B6557820B8C3E7D7dB805B47ACF7eed45a014 | 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B |
+| Prod        | Polygon | 0x048b89AB8669BE06DAB148B0806d7274541257C9 | 0x5a242099C159722a5E44798AeABe54cAbCd844BB | 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B |
