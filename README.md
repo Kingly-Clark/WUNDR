@@ -8,7 +8,7 @@ Trezor Suite settings --> Device and change the "Safety Check" option to prompt,
 
 ## Deployments:
 
-| Environment | Chain   | ERC20 WUNDR Token                          | DEFAULT_ADMIN                              | MINTER_ROLE Recipient                      |
+| Environment | Chain   | ERC20 WUNDR Token                          | DEFAULT_ADMIN                              | MINTER_ROLE                                |
 | ----------- | ------- | ------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
 | Testnet     | Mumbai  | 0x0c9Ff5D08930F6993CE0D88E83890746942367aF | 0xA04703511790408902F71Bb2230c23591c4c54C4 | 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B |
 | Staging     | Polygon | 0x3a8B6557820B8C3E7D7dB805B47ACF7eed45a014 | 0xA04703511790408902F71Bb2230c23591c4c54C4 | 0x7D78710570D65b17D860Dd6AC51ECa426cc8Ee9B |
